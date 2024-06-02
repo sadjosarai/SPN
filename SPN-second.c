@@ -2,6 +2,17 @@
 #include <stdlib.h>
 #include <time.h>
 
+// Tableaux statiques pi_sbox et pi_pbox
+int pi_sbox[2][16] = {
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+    {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+};
+
+int pi_pbox[2][16] = {
+    {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
+    {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+};
+
 // Fonction pour lire le contenu d'un fichier et le stocker dans un tableau
 char* readFile(const char *filename, size_t *size) {
     FILE *file = fopen(filename, "r");
@@ -29,14 +40,6 @@ char* readFile(const char *filename, size_t *size) {
     return buffer;
 }
 
-// Fonction pour imprimer un tableau de caractères
-void printCharArray(const char *array, size_t size) {
-    for (size_t i = 0; i < size; i++) {
-        printf("%c", array[i]);
-    }
-    printf("\n");
-}
-
 // Fonction pour imprimer un tableau d'entiers
 void printIntArray(const int *array, size_t size) {
     for (size_t i = 0; i < size; i++) {
@@ -46,43 +49,49 @@ void printIntArray(const int *array, size_t size) {
 }
 
 // Fonction pour convertir un entier en binaire (sur 8 bits)
-void intToBinary(int n, int *binaryArray) {
+void intToBinary8Bits(int n, int *binaryArray) {
     for (int i = 7; i >= 0; i--) {
         binaryArray[i] = n % 2;
         n /= 2;
     }
 }
 
-// Fonction pour convertir un bloc de 4 bits en décimal
-int binaryToDecimal(int *binaryArray) {
-    int decimal = 0;
-    for (int i = 0; i < 4; i++) {
-        decimal = decimal * 2 + binaryArray[i];
+// Fonction pour convertir un entier en binaire (sur 4 bits)
+void intToBinary4Bits(int n, int *binaryArray) {
+    for (int i = 3; i >= 0; i--) {
+        binaryArray[i] = n % 2;
+        n /= 2;
     }
-    return decimal;
 }
 
 // Fonction pour imprimer un tableau binaire
 void printBinaryArray(const int *array, size_t size) {
     for (size_t i = 0; i < size; i++) {
         printf("%d", array[i]);
-        if ((i + 1) % 8 == 0) {
+        if ((i + 1) % 4 == 0) {
             printf(" ");
         }
     }
     printf("\n");
 }
 
-// Fonction pour substituer les valeurs des colonnes selon pi_sbox
-void substituteColumns(int **tables, size_t numTables, const int pi_sbox[2][16]) {
-    for (size_t t = 0; t < numTables; t++) {
-        for (int col = 0; col < 16; col++) {
-            int value = tables[t][col];
-            // Rechercher la valeur dans la ligne 1 de pi_sbox
-            for (int i = 0; i < 16; i++) {
-                if (pi_sbox[0][i] == value) {
-                    // Substituer avec la valeur correspondante de la ligne 2
-                    tables[t][col] = pi_sbox[1][i];
+// Fonction pour convertir un tableau de binaire (4 bits) en entier
+int binaryToDecimal(const int *binaryArray) {
+    int value = 0;
+    for (int i = 0; i < 4; i++) {
+        value = value * 2 + binaryArray[i];
+    }
+    return value;
+}
+
+// Fonction pour appliquer la substitution
+void substituteColumns(int **tables, size_t numTables, int pi_sbox[2][16]) {
+    for (size_t i = 0; i < numTables; i++) {
+        for (int j = 0; j < 4; j++) {
+            int value = tables[i][j];
+            for (int k = 0; k < 16; k++) {
+                if (pi_sbox[0][k] == value) {
+                    tables[i][j] = pi_sbox[1][k];
                     break;
                 }
             }
@@ -90,105 +99,60 @@ void substituteColumns(int **tables, size_t numTables, const int pi_sbox[2][16])
     }
 }
 
-// Fonction pour permuter les valeurs des tableaux selon pi_pbox
-void permuteColumns(int **tables, size_t numTables, const int pi_pbox[2][16]) {
-    for (size_t t = 0; t < numTables; t++) {
+// Fonction pour appliquer la permutation
+void permuteColumns(int **tables, size_t numTables, int pi_pbox[2][16]) {
+    for (size_t i = 0; i < numTables; i++) {
         int tempTable[16];
-        for (int col = 0; col < 16; col++) {
-            int index1 = -1;
-            // Trouver l'indice correspondant dans la ligne 1 de pi_pbox
-            for (int i = 0; i < 16; i++) {
-                if (pi_pbox[0][i] == col) {
-                    index1 = i;
+        for (int j = 0; j < 16; j++) {
+            tempTable[j] = tables[i][j];
+        }
+        for (int j = 0; j < 16; j++) {
+            int index = 0;
+            for (int k = 0; k < 16; k++) {
+                if (pi_pbox[0][k] == j) {
+                    index = k;
                     break;
                 }
             }
-            // Utiliser cet indice pour trouver la nouvelle position dans la ligne 2 de pi_pbox
-            if (index1 != -1) {
-                int newIndex = pi_pbox[1][index1];
-                tempTable[col] = tables[t][newIndex];
-            }
-        }
-        // Copier les valeurs permutées dans le tableau original
-        for (int col = 0; col < 16; col++) {
-            tables[t][col] = tempTable[col];
+            tables[i][j] = tempTable[pi_pbox[1][index]];
         }
     }
 }
 
-int main() {
-    // Initialiser les tableaux pi_sbox et pi_pbox de manière statique
-    int pi_sbox[2][16] = {
-        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-        {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-    };
-
-    int pi_pbox[2][16] = {
-        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-        {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
-    };
-
-    // Imprimer pi_sbox
-    printf("pi_sbox:\n");
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 16; j++) {
-            printf("%d ", pi_sbox[i][j]);
-        }
-        printf("\n");
-    }
-
-    // Imprimer pi_pbox
-    printf("\npi_pbox:\n");
-    for (int i = 0; i < 2; i++) {
-        for (int j = 0; j < 16; j++) {
-            printf("%d ", pi_pbox[i][j]);
-        }
-        printf("\n");
-    }
-
-    const char *filename = "file.txt";
+// Fonction pour lire le fichier key.txt et générer le tableau s_key
+void generateSubkeys(const char *filename) {
     size_t size;
 
     // Lire le fichier et stocker le contenu dans un tableau
     char *text = readFile(filename, &size);
-    
-    // Imprimer le tableau de caractères
-    printf("\nContenu du fichier:\n");
-    printCharArray(text, size);
 
-    // Créer un tableau pour les codes ASCII
+    // Convertir chaque caractère en code ASCII
     int *asciiCodes = malloc(size * sizeof(int));
     if (!asciiCodes) {
         perror("Erreur d'allocation mémoire");
         exit(EXIT_FAILURE);
     }
 
-    // Convertir chaque caractère en code ASCII
     for (size_t i = 0; i < size; i++) {
         asciiCodes[i] = (int)text[i];
     }
 
-    // Imprimer le tableau de codes ASCII
-    printf("\nCodes ASCII:\n");
-    printIntArray(asciiCodes, size);
-
-    // Créer un tableau pour les valeurs binaires (chaque code ASCII est représenté par 8 bits)
+    // Convertir chaque code ASCII en binaire
     int *binaryArray = malloc(size * 8 * sizeof(int));
     if (!binaryArray) {
         perror("Erreur d'allocation mémoire");
         exit(EXIT_FAILURE);
     }
 
-    // Convertir chaque code ASCII en binaire
     for (size_t i = 0; i < size; i++) {
-        intToBinary(asciiCodes[i], &binaryArray[i * 8]);
+        intToBinary8Bits(asciiCodes[i], &binaryArray[i * 8]);
     }
 
-    // Imprimer le tableau binaire
-    printf("\nValeurs binaires:\n");
+    // Afficher le tableau binaire complet
+    printf("Tableau binaire complet pour la clé:\n");
     printBinaryArray(binaryArray, size * 8);
 
-    // Créer un tableau pour les valeurs décimales (chaque bloc de 4 bits)
+    // Convertir chaque bloc de 4 bits en décimal
     size_t numBlocks = (size * 8) / 4;
     int *decimalArray = malloc(numBlocks * sizeof(int));
     if (!decimalArray) {
@@ -196,7 +160,6 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    // Convertir chaque bloc de 4 bits en décimal
     int tempBlock[4];
     for (size_t i = 0; i < numBlocks; i++) {
         for (int j = 0; j < 4; j++) {
@@ -205,61 +168,156 @@ int main() {
         decimalArray[i] = binaryToDecimal(tempBlock);
     }
 
-    // Imprimer les blocs de 4 bits convertis en décimal
-    printf("\nValeurs décimales par bloc de 4 bits:\n");
-    printIntArray(decimalArray, numBlocks);
+    // Déterminer le nombre de lignes pour s_key (entre 5 et 8)
+    srand(time(NULL));
+    int numLines = (rand() % 4) + 5;
 
-    // Créer et imprimer les tableaux de taille 16 avant substitution
-    size_t numTables = (numBlocks + 15) / 16; // Nombre de tableaux nécessaires
-    int **tables = malloc(numTables * sizeof(int*));
-    for (size_t i = 0; i < numTables; i++) {
-        tables[i] = malloc(16 * sizeof(int));
-        size_t start = i * 16;
-        size_t end = (start + 16 < numBlocks) ? start + 16 : numBlocks;
-        for (size_t j = start; j < end; j++) {
-            tables[i][j - start] = decimalArray[j];
-        }
-        for (size_t j = end; j < start + 16; j++) {
-            tables[i][j - start] = 0; // Remplir avec des zéros si nécessaire
+    // Créer le tableau s_key
+    int s_key[numLines][16];
+    int index = 0;
+    for (int i = 0; i < numLines; i++) {
+        for (int j = 0; j < 16; j++) {
+            if (index < numBlocks) {
+                s_key[i][j] = decimalArray[index++];
+            } else {
+                s_key[i][j] = 0; // Remplir avec des zéros si les données sont insuffisantes
+            }
         }
     }
 
-    // Imprimer les tableaux de taille 16 avant substitution
-    printf("\nTableaux de taille 16 avant substitution:\n");
-    for (size_t i = 0; i < numTables; i++) {
-        printf("Tableau %zu:\n", i + 1);
-        printIntArray(tables[i], 16);
+    // Afficher le tableau s_key
+    printf("\nTableau s_key généré:\n");
+    for (int i = 0; i < numLines; i++) {
+        printIntArray(s_key[i], 16);
     }
 
-    // Substituer les valeurs des colonnes selon pi_sbox
+    // Libération de la mémoire allouée
+    free(text);
+    free(asciiCodes);
+    free(binaryArray);
+    free(decimalArray);
+}
+
+// Fonction pour traiter le fichier file.txt et effectuer les opérations de substitution et permutation
+void processFile(const char *filename) {
+    size_t size;
+
+    // Lire le fichier et stocker le contenu dans un tableau
+    char *text = readFile(filename, &size);
+
+    // Convertir chaque caractère en code ASCII
+    int *asciiCodes = malloc(size * sizeof(int));
+    if (!asciiCodes) {
+        perror("Erreur d'allocation mémoire");
+        exit(EXIT_FAILURE);
+    }
+
+    for (size_t i = 0; i < size; i++) {
+        asciiCodes[i] = (int)text[i];
+    }
+
+    // Convertir chaque code ASCII en binaire
+    int *binaryArray = malloc(size * 8 * sizeof(int));
+    if (!binaryArray) {
+        perror("Erreur d'allocation mémoire");
+        exit(EXIT_FAILURE);
+    }
+
+    for (size_t i = 0; i < size; i++) {
+        intToBinary8Bits(asciiCodes[i], &binaryArray[i * 8]);
+    }
+
+    // Afficher le tableau binaire complet
+    printf("\nTableau binaire complet pour file.txt:\n");
+    printBinaryArray(binaryArray, size * 8);
+
+    // Convertir chaque bloc de 4 bits en décimal
+    size_t numBlocks = (size * 8) / 4;
+    int *decimalArray = malloc(numBlocks * sizeof(int));
+    if (!decimalArray) {
+        perror("Erreur d'allocation mémoire");
+        exit(EXIT_FAILURE);
+    }
+
+    int tempBlock[4];
+    for (size_t i = 0; i < numBlocks; i++) {
+        for (int j = 0; j < 4; j++) {
+            tempBlock[j] = binaryArray[i * 4 + j];
+        }
+        decimalArray[i] = binaryToDecimal(tempBlock);
+    }
+
+    // Créer des tableaux de blocs de 4 pour les opérations suivantes
+    size_t numTables = numBlocks / 4;
+    int **tables = malloc(numTables * sizeof(int *));
+    for (size_t i = 0; i < numTables; i++) {
+        tables[i] = malloc(4 * sizeof(int));
+        for (int j = 0; j < 4; j++) {
+            tables[i][j] = decimalArray[i * 4 + j];
+        }
+    }
+
+    // Afficher les tableaux avant substitution
+    printf("\nTableaux avant substitution:\n");
+    for (size_t i = 0; i < numTables; i++) {
+        printIntArray(tables[i], 4);
+    }
+
+    // Effectuer la substitution
     substituteColumns(tables, numTables, pi_sbox);
 
-    // Imprimer les tableaux de taille 16 après substitution
-    printf("\nTableaux de taille 16 après substitution:\n");
+    // Afficher les tableaux après substitution
+    printf("\nTableaux après substitution:\n");
     for (size_t i = 0; i < numTables; i++) {
-        printf("Tableau %zu:\n", i + 1);
-        printIntArray(tables[i], 16);
+        printIntArray(tables[i], 4);
     }
 
-    // Permuter les valeurs des colonnes selon pi_pbox
-    permuteColumns(tables, numTables, pi_pbox);
-
-    // Imprimer les tableaux de taille 16 après permutation
-    printf("\nTableaux de taille 16 après permutation:\n");
+    // Convertir les tableaux après substitution en binaire
+    int **binaryTables = malloc(numTables * sizeof(int *));
     for (size_t i = 0; i < numTables; i++) {
-        printf("Tableau %zu:\n", i + 1);
-        printIntArray(tables[i], 16);
+        binaryTables[i] = malloc(16 * sizeof(int));
+        for (int j = 0; j < 4; j++) {
+            intToBinary4Bits(tables[i][j], &binaryTables[i][j * 4]);
+        }
     }
 
-    // Libérer la mémoire allouée
+    // Afficher les tableaux en binaire après substitution
+    printf("\nTableaux en binaire après substitution:\n");
+    for (size_t i = 0; i < numTables; i++) {
+        printBinaryArray(binaryTables[i], 16);
+    }
+
+    // Effectuer la permutation
+    permuteColumns(binaryTables, numTables, pi_pbox);
+
+    // Afficher les tableaux après permutation
+    printf("\nTableaux après permutation:\n");
+    for (size_t i = 0; i < numTables; i++) {
+        printBinaryArray(binaryTables[i], 16);
+    }
+
+    // Libération de la mémoire allouée
     free(text);
     free(asciiCodes);
     free(binaryArray);
     free(decimalArray);
     for (size_t i = 0; i < numTables; i++) {
         free(tables[i]);
+        free(binaryTables[i]);
     }
     free(tables);
+    free(binaryTables);
+}
+
+int main() {
+    const char *keyFile = "key.txt";  // Fichier pour générer les sous-clés
+    const char *dataFile = "file.txt"; // Fichier pour les opérations avec pi_sbox et pi_pbox
+
+    // Générer le système de sous-clés à partir du fichier key.txt
+    generateSubkeys(keyFile);
+
+    // Traiter le fichier file.txt
+    processFile(dataFile);
 
     return 0;
 }
