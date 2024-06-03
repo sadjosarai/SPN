@@ -1,6 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <time.h>
 
 // Tableaux statiques pi_sbox et pi_pbox
@@ -100,21 +99,19 @@ void substituteColumns(int *block, int pi_sbox[2][16]) {
 
 // Fonction pour appliquer la permutation
 void permuteColumns(int *block, int pi_pbox[2][16]) {
-    // Convertir chaque entier en binaire (4 bits) et les concaténer
-    int binaryBlock[16];
-    for (int i = 0; i < 4; i++) {
-        intToBinary4Bits(block[i], &binaryBlock[i * 4]);
-    }
-
-    // Appliquer la permutation
-    int permutedBlock[16];
+    int tempBlock[16];
     for (int j = 0; j < 16; j++) {
-        permutedBlock[j] = binaryBlock[pi_pbox[1][j]];
+        tempBlock[j] = block[j];
     }
-
-    // Diviser en blocs de 4 bits et convertir en décimal
-    for (int i = 0; i < 4; i++) {
-        block[i] = binaryToDecimal(&permutedBlock[i * 4]);
+    for (int j = 0; j < 16; j++) {
+        int index = 0;
+        for (int k = 0; k < 16; k++) {
+            if (pi_pbox[0][k] == j) {
+                index = k;
+                break;
+            }
+        }
+        block[j] = tempBlock[pi_pbox[1][index]];
     }
 }
 
@@ -185,7 +182,7 @@ void generateSubkeys(const char *filename, int ***s_key, int *numLines) {
     for (int i = 0; i < *numLines; i++) {
         (*s_key)[i] = malloc(4 * sizeof(int));
         for (int j = 0; j < 4; j++) {
-            (*s_key)[i][j] = decimalArray[i + j];
+            (*s_key)[i][j] = decimalArray[i * 4 + j];
         }
     }
 
@@ -213,8 +210,8 @@ void xorBlocks(int *block1, const int *block2, size_t size) {
     }
 }
 
-// Fonction pour traiter le fichier d'entrée et appliquer les opérations SPN
-void processFile(const char *filename, int **s_key, int numLines, int N) {
+// Fonction principale pour effectuer les opérations de substitution, permutation et XOR
+void processFile(const char *filename, int N, int **s_key, int numLines) {
     size_t size;
 
     // Lire le fichier et stocker le contenu dans un tableau
@@ -242,185 +239,125 @@ void processFile(const char *filename, int **s_key, int numLines, int N) {
         intToBinary8Bits(asciiCodes[i], &binaryArray[i * 8]);
     }
 
-    // Afficher le tableau binaire complet pour le texte
-    printf("Tableau binaire complet pour le texte:\n");
-    printBinaryArray(binaryArray, size * 8);
-
-    // Diviser le tableau binaire en blocs de 4 bits
-    size_t numBlocks = (size * 8) / 4;
-    int **block4Array = malloc(numBlocks * sizeof(int *));
-    if (!block4Array) {
+    // Diviser le tableau binaire en blocs de 16 bits
+    size_t numBlocks = (size * 8) / 16;
+    int **blocks = malloc(numBlocks * sizeof(int *));
+    if (!blocks) {
         perror("Erreur d'allocation mémoire");
         exit(EXIT_FAILURE);
     }
 
     for (size_t i = 0; i < numBlocks; i++) {
-        block4Array[i] = malloc(4 * sizeof(int));
-        for (int j = 0; j < 4; j++) {
-            block4Array[i][j] = binaryArray[i * 4 + j];
+        blocks[i] = malloc(16 * sizeof(int));
+        for (int j = 0; j < 16; j++) {
+            blocks[i][j] = binaryArray[i * 16 + j];
         }
     }
 
-    // Convertir les blocs de 4 bits en décimal
-    int *decimalArray = malloc(numBlocks * sizeof(int));
-    if (!decimalArray) {
-        perror("Erreur d'allocation mémoire");
-        exit(EXIT_FAILURE);
-    }
-
+    // Afficher les blocs initiaux
+    printf("Blocs initiaux:\n");
     for (size_t i = 0; i < numBlocks; i++) {
-        decimalArray[i] = binaryToDecimal(block4Array[i]);
+        printBinaryArray(blocks[i], 16);
     }
 
-    // Créer le tableau textBloc
-    int **textBloc = malloc((numBlocks / 4) * sizeof(int *));
-    for (size_t i = 0; i < numBlocks / 4; i++) {
-        textBloc[i] = malloc(4 * sizeof(int));
-        for (int j = 0; j < 4; j++) {
-            textBloc[i][j] = decimalArray[i * 4 + j];
-        }
-    }
+    // Effectuer les opérations sur chaque bloc pour chaque itération
+    for (int n = 0; n < N; n++) {
+        for (size_t i = 0; i < numBlocks; i++) {
+            // XOR avec s_key[n % numLines]
+            xorBlocks(blocks[i], s_key[n % numLines], 16);
 
-    // Afficher le tableau textBloc initial
-    printf("\nTableau textBloc initial:\n");
-    for (size_t i = 0; i < numBlocks / 4; i++) {
-        printIntArray(textBloc[i], 4);
-    }
+            // Convertir chaque bloc en décimal pour les opérations suivantes
+            int decimalBlock[4];
+            for (int j = 0; j < 4; j++) {
+                int block4Bits[4];
+                for (int k = 0; k < 4; k++) {
+                    block4Bits[k] = blocks[i][j * 4 + k];
+                }
+                decimalBlock[j] = binaryToDecimal(block4Bits);
+            }
 
-    // Effectuer les opérations SPN pour i allant de 1 à N-1
-    for (int i = 1; i < N; i++) {
-        printf("\nÉtape %d:\n", i);
+            // Substitution
+            substituteColumns(decimalBlock, pi_sbox);
 
-        // XOR entre chaque ligne de textBloc et la ligne i-1 de s_key
-        for (size_t j = 0; j < numBlocks / 4; j++) {
-            xorBlocks(textBloc[j], s_key[i - 1], 4);
-        }
+            // Convertir de nouveau en binaire
+            for (int j = 0; j < 4; j++) {
+                int block4Bits[4];
+                intToBinary4Bits(decimalBlock[j], block4Bits);
+                for (int k = 0; k < 4; k++) {
+                    blocks[i][j * 4 + k] = block4Bits[k];
+                }
+            }
 
-        // Afficher le tableau textBloc après XOR
-        printf("Tableau textBloc après XOR avec la sous-clé %d:\n", i - 1);
-        for (size_t j = 0; j < numBlocks / 4; j++) {
-            printIntArray(textBloc[j], 4);
-        }
+            // Permutation
+            permuteColumns(blocks[i], pi_pbox);
 
-        // Substitution
-        for (size_t j = 0; j < numBlocks / 4; j++) {
-            substituteColumns(textBloc[j], pi_sbox);
-        }
-
-        // Afficher le tableau textBloc après substitution
-        printf("Tableau textBloc après substitution:\n");
-        for (size_t j = 0; j < numBlocks / 4; j++) {
-            printIntArray(textBloc[j], 4);
-        }
-
-        // Permutation
-        for (size_t j = 0; j < numBlocks / 4; j++) {
-            permuteColumns(textBloc[j], pi_pbox);
-        }
-
-        // Afficher le tableau textBloc après permutation
-        printf("Tableau textBloc après permutation:\n");
-        for (size_t j = 0; j < numBlocks / 4; j++) {
-            printIntArray(textBloc[j], 4);
-        }
-    }
-
-    // Dernière étape: XOR, substitution, XOR
-    printf("\nDernière étape:\n");
-
-    // XOR avec la sous-clé N-1
-    for (size_t j = 0; j < numBlocks / 4; j++) {
-        xorBlocks(textBloc[j], s_key[N - 1], 4);
-    }
-
-    // Afficher le tableau textBloc après XOR avec la sous-clé N-1
-    printf("Tableau textBloc après XOR avec la sous-clé %d:\n", N - 1);
-    for (size_t j = 0; j < numBlocks / 4; j++) {
-        printIntArray(textBloc[j], 4);
-    }
-
-    // Substitution
-    for (size_t j = 0; j < numBlocks / 4; j++) {
-        substituteColumns(textBloc[j], pi_sbox);
-    }
-
-    // Afficher le tableau textBloc après substitution
-    printf("Tableau textBloc après substitution:\n");
-    for (size_t j = 0; j < numBlocks / 4; j++) {
-        printIntArray(textBloc[j], 4);
-    }
-
-    // XOR avec la sous-clé N
-    for (size_t j = 0; j < numBlocks / 4; j++) {
-        xorBlocks(textBloc[j], s_key[N], 4);
-    }
-
-    // Afficher le tableau textBloc après XOR avec la sous-clé N
-    printf("Tableau textBloc après XOR avec la sous-clé %d:\n", N);
-    for (size_t j = 0; j < numBlocks / 4; j++) {
-        printIntArray(textBloc[j], 4);
-    }
-
-    // Convertir chaque colonne de textBloc en binaire de 4 bits et les afficher
-    int *finalBinaryArray = malloc(numBlocks * 4 * sizeof(int));
-    if (!finalBinaryArray) {
-        perror("Erreur d'allocation mémoire");
-        exit(EXIT_FAILURE);
-    }
-
-    printf("\nTableau textBloc final en binaire:\n");
-    for (size_t i = 0; i < numBlocks / 4; i++) {
-        for (int j = 0; j < 4; j++) {
-            int binary4Bits[4];
-            intToBinary4Bits(textBloc[i][j], binary4Bits);
-            printBinaryArray(binary4Bits, 4);
-            for (int k = 0; k < 4; k++) {
-                finalBinaryArray[i * 16 + j * 4 + k] = binary4Bits[k];
+            // Afficher les blocs après chaque itération
+            printf("Blocs après l'itération %d:\n", n + 1);
+            for (size_t i = 0; i < numBlocks; i++) {
+                printBinaryArray(blocks[i], 16);
             }
         }
     }
 
-    // Réunir les blocs de 8 bits, convertir en ASCII et afficher
-    char *finalText = malloc((numBlocks / 2) * sizeof(char));
-    for (size_t i = 0; i < numBlocks / 2; i++) {
-        int binary8Bits[8];
-        for (int j = 0; j < 8; j++) {
-            binary8Bits[j] = finalBinaryArray[i * 8 + j];
-        }
-        finalText[i] = (char)binaryToDecimal(binary8Bits);
-    }
+    // Dernière étape spéciale
+    for (size_t i = 0; i < numBlocks; i++) {
+        // XOR avec s_key[N % numLines]
+        xorBlocks(blocks[i], s_key[N % numLines], 16);
 
-    printf("\nTexte final:\n%s\n", finalText);
+        // Convertir chaque bloc en décimal pour les opérations suivantes
+        int decimalBlock[4];
+        for (int j = 0; j < 4; j++) {
+            int block4Bits[4];
+            for (int k = 0; k < 4; k++) {
+                block4Bits[k] = blocks[i][j * 4 + k];
+            }
+            decimalBlock[j] = binaryToDecimal(block4Bits);
+        }
+
+        // Substitution
+        substituteColumns(decimalBlock, pi_sbox);
+
+        // Convertir de nouveau en binaire
+        for (int j = 0; j < 4; j++) {
+            int block4Bits[4];
+            intToBinary4Bits(decimalBlock[j], block4Bits);
+            for (int k = 0; k < 4; k++) {
+                blocks[i][j * 4 + k] = block4Bits[k];
+            }
+        }
+
+        // XOR avec s_key[(N + 1) % numLines]
+        xorBlocks(blocks[i], s_key[(N + 1) % numLines], 16);
+
+        // Afficher les blocs après la dernière étape
+        printf("Blocs après la dernière étape:\n");
+        for (size_t i = 0; i < numBlocks; i++) {
+            printBinaryArray(blocks[i], 16);
+        }
+    }
 
     // Libération de la mémoire allouée
     free(text);
     free(asciiCodes);
     free(binaryArray);
     for (size_t i = 0; i < numBlocks; i++) {
-        free(block4Array[i]);
+        free(blocks[i]);
     }
-    free(block4Array);
-    free(decimalArray);
-    for (size_t i = 0; i < numBlocks / 4; i++) {
-        free(textBloc[i]);
-    }
-    free(textBloc);
-    free(finalBinaryArray);
-    free(finalText);
+    free(blocks);
 }
 
 int main() {
+    int N = 4;  // Nombre d'itérations
     int **s_key;
     int numLines;
-    int N = 4;
 
     // Générer les sous-clés
     generateSubkeys("key.txt", &s_key, &numLines);
 
-    // Traiter le fichier d'entrée
-    processFile("file.txt", s_key, numLines, N);
+    // Traiter le fichier avec les sous-clés
+    processFile("file.txt", N, s_key, numLines);
 
-    // Libération de la mémoire allouée pour s_key
+    // Libérer la mémoire pour les sous-clés
     for (int i = 0; i < numLines; i++) {
         free(s_key[i]);
     }
