@@ -3,15 +3,16 @@
 #include <string.h>
 #include <time.h>
 
+#define MAX_TEXT_SIZE 1024
 // Tableaux statiques pi_sbox et pi_pbox
 int pi_sbox[2][16] = {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-    {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+    {14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7}
 };
 
 int pi_pbox[2][16] = {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-    {15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0}
+    {1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15, 4, 8, 12, 16}
 };
 
 // Fonction pour lire le contenu d'un fichier et le stocker dans un tableau
@@ -49,6 +50,7 @@ void printIntArray(const int *array, size_t size) {
     printf("\n");
 }
 
+
 // Fonction pour convertir un entier en binaire (sur 8 bits)
 void intToBinary8Bits(int n, int *binaryArray) {
     for (int i = 7; i >= 0; i--) {
@@ -76,10 +78,27 @@ void printBinaryArray(const int *array, size_t size) {
     printf("\n");
 }
 
+// Fonction pour imprimer un tableau binaire par bloc de 8
+void printBinary8Array(const int *array, size_t size) {
+    for (size_t i = 0; i < size; i++) {
+        printf("%d", array[i]);
+    }
+    printf("\n");
+}
+
 // Fonction pour convertir un tableau de binaire (4 bits) en entier
 int binaryToDecimal(const int *binaryArray) {
     int value = 0;
     for (int i = 0; i < 4; i++) {
+        value = value * 2 + binaryArray[i];
+    }
+    return value;
+}
+
+// Fonction pour convertir un tableau de binaire (8 bits) en entier
+int binary8ToDecimal(const int *binaryArray) {
+    int value = 0;
+    for (int i = 0; i < 8; i++) {
         value = value * 2 + binaryArray[i];
     }
     return value;
@@ -361,16 +380,42 @@ void processFile(const char *filename, int **s_key, int numLines, int N) {
         printIntArray(textBloc[j], 4);
     }
 
-    // Réunir les blocs de bits en blocs de 8 bits, convertir en ASCII et afficher
+    // Convertir chaque colonne de textBloc en binaire de 4 bits et les afficher
+    int *finalBinaryArray = malloc(numBlocks * 4 * sizeof(int));
+    if (!finalBinaryArray) {
+        perror("Erreur d'allocation mémoire");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("\nTableau textBloc final en binaire:\n");
+    for (size_t i = 0; i < numBlocks / 4; i++) {
+        for (int j = 0; j < 4; j++) {
+            int binary4Bits[4];
+            intToBinary4Bits(textBloc[i][j], binary4Bits);
+            printBinaryArray(binary4Bits, 4);
+            for (int k = 0; k < 4; k++) {
+                finalBinaryArray[i * 16 + j * 4 + k] = binary4Bits[k];
+            }
+        }
+    }
+
+    // Réunir les blocs de 8 bits, convertir en ASCII et afficher
     char *finalText = malloc((numBlocks / 2) * sizeof(char));
+    int binary8Bits[8];
     for (size_t i = 0; i < numBlocks / 2; i++) {
-        int binary8Bits[8];
-        intToBinary4Bits(textBloc[i / 2][0], &binary8Bits[0]);
-        intToBinary4Bits(textBloc[i / 2][1], &binary8Bits[4]);
-        finalText[i] = (char)binaryToDecimal(binary8Bits);
+        for (int j = 0; j < 8; j++) {
+            binary8Bits[j] = finalBinaryArray[i * 8 + j];
+        }
+
+        printf("binary8Bits line %d : ", i );
+        printBinary8Array(binary8Bits, 8);
+        int lineDecimal = binary8ToDecimal(binary8Bits);
+        finalText[i] = (char)binary8ToDecimal(binary8Bits);
+        printf("finalText line %d in decimal is : %d which correspond to the character %c\n", i, lineDecimal, finalText[i]);
     }
 
     printf("\nTexte final:\n%s\n", finalText);
+    
 
     // Libération de la mémoire allouée
     free(text);
@@ -385,6 +430,7 @@ void processFile(const char *filename, int **s_key, int numLines, int N) {
         free(textBloc[i]);
     }
     free(textBloc);
+    free(finalBinaryArray);
     free(finalText);
 }
 
