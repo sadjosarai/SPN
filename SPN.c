@@ -12,7 +12,7 @@ int pi_sbox[2][16] = {
 
 int pi_pbox[2][16] = {
     {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-    {1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15, 4, 8, 12, 16}
+    {0, 4, 8, 12, 1, 5, 9, 13, 2, 6, 10, 14, 3, 7, 11, 15}
 };
 
 // Fonction pour lire le contenu d'un fichier et le stocker dans un tableau
@@ -125,6 +125,13 @@ void permuteColumns(int *block, int pi_pbox[2][16]) {
         intToBinary4Bits(block[i], &binaryBlock[i * 4]);
     }
 
+    // // impression de binaryBlock avant la permutation
+    // for (int i = 0; i < 17; i++){
+    //     size_t size;
+    //     printf("textbloc before permutation");
+    //     printBinary8Array(binaryBlock[i], size * 8);
+    // }
+
     // Appliquer la permutation
     int permutedBlock[16];
     for (int j = 0; j < 16; j++) {
@@ -168,7 +175,7 @@ void generateSubkeys(const char *filename, int ***s_key, int *numLines) {
 
     // Afficher le tableau binaire complet pour la clé
     printf("Tableau binaire complet pour la clé:\n");
-    printBinaryArray(binaryArray, size * 8);
+    printBinary8Array(binaryArray, size * 8);
 
     // Diviser le tableau binaire en blocs de 4 bits
     size_t numBlocks = (size * 8) / 4;
@@ -181,7 +188,7 @@ void generateSubkeys(const char *filename, int ***s_key, int *numLines) {
     for (size_t i = 0; i < numBlocks; i++) {
         block4Array[i] = malloc(4 * sizeof(int));
         for (int j = 0; j < 4; j++) {
-            block4Array[i][j] = binaryArray[i * 4 + j];
+            block4Array[i][j] = binaryArray[i + j];
         }
     }
 
